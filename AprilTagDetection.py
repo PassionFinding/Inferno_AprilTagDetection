@@ -1,53 +1,54 @@
 import cv2
-import apriltag
+from pupil_apriltags import Detector
 
-#Initialize the camera
-camera_index = 0 #Adjust as needed for setup
-cap = cv2.VideoCapture(camera_index)
+# Initialize AprilTag detector
+at_detector = Detector(families="tag36h11")  # Default tag family
 
-#Set resolution (adjust for Raspberry Pi Camera Module 3)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+# Open the camera (use 0 or the appropriate index for your camera)
+cap = cv2.VideoCapture(0)
 
-#Initialize the AprilTag detector
-options = apriltag.DetectorOptions(families="tag36h11")
-detector = apriltag.Detector(options)
+if not cap.isOpened():
+    print("Cannot access the camera")
+    exit()
 
-print("Press 'q' to quit")
+print("Press 'q' to quit.")
 
 while True:
-  ret, frame = cap.read()
-  if not ret:
-    print("Failed to capture frame")
-    break
+    ret, frame = cap.read()
+    if not ret:
+        print("Failed to grab frame")
+        break
 
-  #Convert to grayscale
-  gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    # Convert to grayscale (required for AprilTag detection)
+    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-  #Detect AprilTags
-  results = detector.detect(gray)
+    # Detect AprilTags
+    tags = at_detector.detect(gray_frame)
 
-  for result in results:
-    #Draw the bounding box
-    for i in range(len(result.corners)):
-      start_point = tuple(map(int, result.corners[i-1]))
-      end_point = tuple(map(int, result.corners[i]))
-      cv2.line(frame, start_point, end_point, (0, 255, 0), 2)
+    # Draw detections
+    for tag in tags:
+        (ptA, ptB, ptC, ptD) = tag.corners
+        ptA = tuple(map(int, ptA))
+        ptB = tuple(map(int, ptB))
+        ptC = tuple(map(int, ptC))
+        ptD = tuple(map(int, ptD))
 
-    #Mark the center of the tag
-    center = tuple(map(int, result.center))
-    cv2.circle(frame, center, 5, (0, 0, 255), -1)
+        # Draw bounding box
+        cv2.line(frame, ptA, ptB, (0, 255, 0), 2)
+        cv2.line(frame, ptB, ptC, (0, 255, 0), 2)
+        cv2.line(frame, ptC, ptD, (0, 255, 0), 2)
+        cv2.line(frame, ptD, ptA, (0, 255, 0), 2)
 
-    #Display tag ID
-    tag_id = result.tag_id
-    cv2.putText(frame, f"ID: {tag_id}", (center[0] + 10, center[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        # Add the tag ID near the top-left corner
+        cv2.putText(frame, f"ID: {tag.tag_id}", (ptA[0], ptA[1] - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-  #Display the frame
-  cv2.imshow("AprilTag Detection", frame)
+    # Display the frame
+    cv2.imshow("AprilTag Detection", frame)
 
-  #Exit on 'q' key press
-  if cv2.waitKey(1) & 0xFF == ord('q'):
-    break
+    # Exit when 'q' is pressed
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
 cap.release()
 cv2.destroyAllWindows()
